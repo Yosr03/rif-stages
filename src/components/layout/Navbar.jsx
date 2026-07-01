@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { LogOut, User, Menu, X } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 import { useState } from 'react';
 
 const Navbar = () => {
@@ -16,15 +17,15 @@ const Navbar = () => {
 
   return (
     <nav style={{
-  backgroundColor: '#1E3A5F',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  position: 'fixed',        // ← Changé de 'sticky' à 'fixed'
-  top: 0,
-  left: 0,                  // ← Ajouté
-  right: 0,                 // ← Ajouté
-  zIndex: 40,
-  width: '100%',
-}}>
+      backgroundColor: '#1E3A5F',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 40,
+      width: '100%',
+    }}>
       <div style={{
         maxWidth: '1280px',
         margin: '0 auto',
@@ -86,6 +87,10 @@ const Navbar = () => {
         }}>
           {isAuthenticated() ? (
             <>
+              {/* 🔔 Notification Bell */}
+              <NotificationBell />
+
+              {/* User info */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -97,6 +102,8 @@ const Navbar = () => {
                   {user?.name}
                 </span>
               </div>
+
+              {/* Logout button */}
               <button
                 onClick={handleLogout}
                 style={{
@@ -109,6 +116,8 @@ const Navbar = () => {
                   color: 'white',
                   backgroundColor: 'rgba(255,255,255,0.1)',
                   borderRadius: '0.5rem',
+                  border: 'none',
+                  cursor: 'pointer',
                   transition: 'background 0.2s',
                 }}
                 onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
@@ -140,20 +149,33 @@ const Navbar = () => {
           )}
         </div>
 
-        {/* Mobile menu button */}
-        <button
-          className="navbar-mobile-btn"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          style={{
-            display: 'none',
-            padding: '0.5rem',
-            color: 'white',
-            backgroundColor: 'transparent',
-            borderRadius: '0.5rem',
-          }}
-        >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        {/* Mobile section (bell + menu button) */}
+        <div className="navbar-mobile-section" style={{
+          display: 'none',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}>
+          {/* Notification bell on mobile (only if authenticated) */}
+          {isAuthenticated() && <NotificationBell />}
+
+          {/* Mobile menu button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            style={{
+              padding: '0.5rem',
+              color: 'white',
+              backgroundColor: 'transparent',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
@@ -188,6 +210,8 @@ const Navbar = () => {
                   backgroundColor: 'transparent',
                   borderRadius: '0.5rem',
                   textAlign: 'left',
+                  border: 'none',
+                  cursor: 'pointer',
                 }}
               >
                 <LogOut size={16} />
@@ -226,7 +250,7 @@ const Navbar = () => {
           .navbar-desktop {
             display: none !important;
           }
-          .navbar-mobile-btn {
+          .navbar-mobile-section {
             display: flex !important;
           }
         }

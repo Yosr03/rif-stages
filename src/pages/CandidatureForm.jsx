@@ -79,7 +79,7 @@ const CandidatureForm = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', paddingTop: '64px' }}>
       <Navbar />
 
       <div style={{

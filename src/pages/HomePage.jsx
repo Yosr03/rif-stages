@@ -4,7 +4,7 @@ import { ArrowRight, Clock, CheckCircle, FileText, Zap, Users, Award, Target } f
 
 const HomePage = () => {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#F9FAFB' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', paddingTop: '64px' }}>
       <Navbar />
 
       {/* ===== HERO SECTION ===== */}
