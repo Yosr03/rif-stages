@@ -1,62 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bell, User, Check, X, Clock, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-// Mock notifications - sera remplacé par Firestore plus tard
-const MOCK_NOTIFICATIONS = [
-  {
-    id: 1,
-    type: 'new_application',
-    candidateName: 'Ahmed Ben Ali',
-    message: 'a soumis une nouvelle candidature',
-    department: 'Développement Web',
-    timestamp: new Date(Date.now() - 5 * 60000).toISOString(), // il y a 5 min
-    read: false,
-  },
-  {
-    id: 2,
-    type: 'new_application',
-    candidateName: 'Sara Trabelsi',
-    message: 'a soumis une nouvelle candidature',
-    department: 'Data Science & IA',
-    timestamp: new Date(Date.now() - 30 * 60000).toISOString(), // il y a 30 min
-    read: false,
-  },
-  {
-    id: 3,
-    type: 'interview_reminder',
-    candidateName: 'Yasmine Gharbi',
-    message: 'Entretien prévu demain à 10h00',
-    department: 'UI/UX Design',
-    timestamp: new Date(Date.now() - 2 * 3600000).toISOString(), // il y a 2h
-    read: false,
-  },
-  {
-    id: 4,
-    type: 'new_application',
-    candidateName: 'Karim Mansouri',
-    message: 'a soumis une nouvelle candidature',
-    department: 'Développement Mobile',
-    timestamp: new Date(Date.now() - 24 * 3600000).toISOString(), // hier
-    read: true,
-  },
-  {
-    id: 5,
-    type: 'status_change',
-    candidateName: 'Mohamed Khelifi',
-    message: 'a été accepté',
-    department: 'DevOps & Cloud',
-    timestamp: new Date(Date.now() - 2 * 24 * 3600000).toISOString(), // il y a 2 jours
-    read: true,
-  },
-];
+import {
+  subscribeToNotifications,
+  markAsRead as markAsReadService,
+  markAllAsRead as markAllAsReadService,
+  deleteNotification as deleteNotifService,
+} from '../../services/notificationService';
 
 const NotificationBell = () => {
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Écouter les notifications en temps réel
+  useEffect(() => {
+    const unsubscribe = subscribeToNotifications((notifs) => {
+      setNotifications(notifs);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -69,22 +34,31 @@ const NotificationBell = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const markAsRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  const handleMarkAsRead = async (id) => {
+    try {
+      await markAsReadService(id);
+    } catch (error) {
+      console.error('Erreur:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsReadService();
+    } catch (error) {
+      console.error('Erreur:', error);
+    }
   };
 
-  const removeNotification = (id, e) => {
+  const removeNotification = async (id, e) => {
     e.stopPropagation();
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await deleteNotifService(id);
+    } catch (error) {
+      console.error('Erreur:', error);
+    }
   };
 
-  // Format relative time
   const getRelativeTime = (timestamp) => {
     const now = new Date();
     const then = new Date(timestamp);
@@ -93,7 +67,7 @@ const NotificationBell = () => {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'À l\'instant';
+    if (diffMins < 1) return "À l'instant";
     if (diffMins < 60) return `Il y a ${diffMins} min`;
     if (diffHours < 24) return `Il y a ${diffHours}h`;
     if (diffDays === 1) return 'Hier';
@@ -131,12 +105,6 @@ const NotificationBell = () => {
           cursor: 'pointer',
           transition: 'background 0.2s',
         }}
-        onMouseOver={(e) => {
-          if (!isOpen) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)';
-        }}
-        onMouseOut={(e) => {
-          if (!isOpen) e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)';
-        }}
       >
         <Bell size={20} />
         {unreadCount > 0 && (
@@ -163,10 +131,8 @@ const NotificationBell = () => {
         )}
       </button>
 
-      {/* Dropdown */}
       {isOpen && (
         <>
-          {/* Mobile overlay */}
           <div
             className="notif-mobile-overlay"
             onClick={() => setIsOpen(false)}
@@ -197,7 +163,6 @@ const NotificationBell = () => {
               animation: 'slideDown 0.2s ease-out',
             }}
           >
-            {/* Header */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -207,20 +172,10 @@ const NotificationBell = () => {
               flexShrink: 0,
             }}>
               <div>
-                <h3 style={{
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  color: '#1F2937',
-                  margin: 0,
-                }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1F2937', margin: 0 }}>
                   Notifications
                 </h3>
-                <p style={{
-                  fontSize: '0.75rem',
-                  color: '#6B7280',
-                  margin: 0,
-                  marginTop: '2px',
-                }}>
+                <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0, marginTop: '2px' }}>
                   {unreadCount > 0
                     ? `${unreadCount} non lue${unreadCount > 1 ? 's' : ''}`
                     : 'Tout est à jour'}
@@ -228,7 +183,7 @@ const NotificationBell = () => {
               </div>
               {unreadCount > 0 && (
                 <button
-                  onClick={markAllAsRead}
+                  onClick={handleMarkAllAsRead}
                   style={{
                     fontSize: '0.75rem',
                     color: '#2563EB',
@@ -238,32 +193,18 @@ const NotificationBell = () => {
                     fontWeight: 600,
                     padding: '0.25rem 0.5rem',
                     borderRadius: '0.375rem',
-                    transition: 'background 0.2s',
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   Tout marquer comme lu
                 </button>
               )}
             </div>
 
-            {/* List */}
-            <div style={{
-              overflowY: 'auto',
-              flex: 1,
-              padding: '0.5rem',
-            }}>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '0.5rem' }}>
               {notifications.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '3rem 1rem',
-                  color: '#9CA3AF',
-                }}>
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#9CA3AF' }}>
                   <Bell size={40} style={{ margin: '0 auto 0.75rem', opacity: 0.4 }} />
-                  <p style={{ fontSize: '0.875rem', margin: 0 }}>
-                    Aucune notification
-                  </p>
+                  <p style={{ fontSize: '0.875rem', margin: 0 }}>Aucune notification</p>
                 </div>
               ) : (
                 notifications.map((notif) => {
@@ -271,7 +212,7 @@ const NotificationBell = () => {
                   return (
                     <div
                       key={notif.id}
-                      onClick={() => markAsRead(notif.id)}
+                      onClick={() => handleMarkAsRead(notif.id)}
                       style={{
                         display: 'flex',
                         gap: '0.75rem',
@@ -283,14 +224,7 @@ const NotificationBell = () => {
                         position: 'relative',
                         marginBottom: '4px',
                       }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.backgroundColor = notif.read ? '#F9FAFB' : '#DBEAFE';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.backgroundColor = notif.read ? 'transparent' : '#F0F9FF';
-                      }}
                     >
-                      {/* Icon */}
                       <div style={{
                         padding: '0.5rem',
                         backgroundColor: bg,
@@ -301,35 +235,20 @@ const NotificationBell = () => {
                         <Icon size={16} color={color} />
                       </div>
 
-                      {/* Content */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{
-                          fontSize: '0.875rem',
-                          color: '#1F2937',
-                          margin: 0,
-                          lineHeight: 1.4,
-                        }}>
+                        <p style={{ fontSize: '0.875rem', color: '#1F2937', margin: 0, lineHeight: 1.4 }}>
                           <strong>{notif.candidateName}</strong> {notif.message}
                         </p>
-                        <p style={{
-                          fontSize: '0.75rem',
-                          color: '#6B7280',
-                          margin: 0,
-                          marginTop: '2px',
-                        }}>
-                          {notif.department}
-                        </p>
-                        <p style={{
-                          fontSize: '0.6875rem',
-                          color: '#9CA3AF',
-                          margin: 0,
-                          marginTop: '4px',
-                        }}>
+                        {notif.department && (
+                          <p style={{ fontSize: '0.75rem', color: '#6B7280', margin: 0, marginTop: '2px' }}>
+                            {notif.department}
+                          </p>
+                        )}
+                        <p style={{ fontSize: '0.6875rem', color: '#9CA3AF', margin: 0, marginTop: '4px' }}>
                           {getRelativeTime(notif.timestamp)}
                         </p>
                       </div>
 
-                      {/* Unread indicator */}
                       {!notif.read && (
                         <div style={{
                           width: '8px',
@@ -341,7 +260,6 @@ const NotificationBell = () => {
                         }} />
                       )}
 
-                      {/* Delete button */}
                       <button
                         onClick={(e) => removeNotification(notif.id, e)}
                         style={{
@@ -352,20 +270,9 @@ const NotificationBell = () => {
                           backgroundColor: 'transparent',
                           border: 'none',
                           cursor: 'pointer',
-                          opacity: 0,
-                          transition: 'opacity 0.2s',
+                          opacity: 0.5,
                           borderRadius: '4px',
                           color: '#9CA3AF',
-                        }}
-                        onMouseOver={(e) => {
-                          e.currentTarget.style.opacity = 1;
-                          e.currentTarget.style.backgroundColor = '#FEE2E2';
-                          e.currentTarget.style.color = '#DC2626';
-                        }}
-                        onMouseOut={(e) => {
-                          e.currentTarget.style.opacity = 0;
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                          e.currentTarget.style.color = '#9CA3AF';
                         }}
                       >
                         <X size={12} />
@@ -376,7 +283,6 @@ const NotificationBell = () => {
               )}
             </div>
 
-            {/* Footer */}
             {notifications.length > 0 && (
               <div style={{
                 padding: '0.75rem 1rem',
@@ -397,10 +303,7 @@ const NotificationBell = () => {
                     textDecoration: 'none',
                     padding: '0.5rem',
                     borderRadius: '0.375rem',
-                    transition: 'background 0.2s',
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#EFF6FF'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   <Eye size={14} />
                   Voir toutes les candidatures
@@ -416,7 +319,6 @@ const NotificationBell = () => {
           from { opacity: 0; transform: translateY(-8px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        
         @media (max-width: 480px) {
           .notif-dropdown {
             position: fixed !important;

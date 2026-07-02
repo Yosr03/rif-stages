@@ -13,18 +13,19 @@ const LoginPage = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const result = login(email, password);
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error);
-    }
-    setLoading(false);
-  };
+  e.preventDefault();
+  setError('');
+  setLoading(true);
+
+  const result = await login(email, password);
+  
+  if (result.success) {
+    navigate('/dashboard');
+  } else {
+    setError(result.error);
+  }
+  setLoading(false);
+};
 
   return (
     <div style={{

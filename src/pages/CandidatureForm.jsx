@@ -5,12 +5,15 @@ import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import TextArea from '../components/common/TextArea';
 import FileUpload from '../components/common/FileUpload';
+import { createCandidature } from '../services/candidatureService';
 import { validateCandidatureForm, sanitizeInput } from '../utils/validators';
 import { STAGE_TYPES, DEPARTMENTS, EDUCATION_LEVELS } from '../utils/constants';
 import {
   User, Mail, Phone, Calendar, GraduationCap, Building2,
   Briefcase, Send, ArrowLeft, ArrowRight, CheckCircle2,
 } from 'lucide-react';
+import { sendSubmissionEmail } from '../services/emailService';
+import { createNotification } from '../services/notificationService';
 
 const STEPS = [
   { id: 1, title: 'Informations personnelles', icon: User },
@@ -57,26 +60,48 @@ const CandidatureForm = () => {
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validateStep(3)) return;
-    setLoading(true);
-    const sanitizedData = {
-      ...formData,
-      firstName: sanitizeInput(formData.firstName),
-      lastName: sanitizeInput(formData.lastName),
-      email: sanitizeInput(formData.email),
-      phone: sanitizeInput(formData.phone),
-      university: sanitizeInput(formData.university),
-      motivation: sanitizeInput(formData.motivation),
-      skills: sanitizeInput(formData.skills),
-      status: 'En attente',
-      submittedAt: new Date().toISOString(),
-    };
-    await new Promise((r) => setTimeout(r, 1500));
-    console.log('Candidature soumise:', sanitizedData);
+  e.preventDefault();
+  if (!validateStep(3)) return;
+  setLoading(true);
+
+  const sanitizedData = {
+    ...formData,
+    firstName: sanitizeInput(formData.firstName),
+    lastName: sanitizeInput(formData.lastName),
+    email: sanitizeInput(formData.email),
+    phone: sanitizeInput(formData.phone),
+    university: sanitizeInput(formData.university),
+    motivation: sanitizeInput(formData.motivation),
+    skills: sanitizeInput(formData.skills),
+  };
+
+  try {
+    // 1. Créer la candidature dans Firestore
+    const newCandidature = await createCandidature(sanitizedData);
+    console.log('✅ Candidature enregistrée');
+
+    // 2. Créer une notification pour le RH
+    await createNotification({
+      type: 'new_application',
+      candidateName: `${sanitizedData.firstName} ${sanitizedData.lastName}`,
+      message: 'a soumis une nouvelle candidature',
+      department: sanitizedData.department,
+      candidateId: newCandidature.id,
+    });
+    console.log('✅ Notification créée');
+
+    // 3. Envoyer email de confirmation
+    await sendSubmissionEmail(sanitizedData);
+    console.log('✅ Email envoyé');
+
     setLoading(false);
     navigate('/success');
-  };
+  } catch (error) {
+    console.error('❌ Erreur:', error);
+    alert('Erreur lors de l\'envoi. Veuillez réessayer.');
+    setLoading(false);
+  }
+};
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#F9FAFB', paddingTop: '64px' }}>

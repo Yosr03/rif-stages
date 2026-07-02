@@ -1,5 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { HR_CREDENTIALS } from '../utils/constants';
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 const AuthContext = createContext(null);
 
@@ -16,37 +21,49 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored session
-    const storedUser = localStorage.getItem('rif_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem('rif_user');
+    // Écoute les changements d'état d'authentification
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          role: 'hr',
+          name: 'Responsable RH',
+        });
+      } else {
+        setUser(null);
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = (email, password) => {
-    // Simple HR authentication (will be replaced with Firebase Auth)
-    if (email === HR_CREDENTIALS.email && password === HR_CREDENTIALS.password) {
-      const userData = {
-        email,
-        role: 'hr',
-        name: 'Responsable RH',
-        loginAt: new Date().toISOString(),
-      };
-      setUser(userData);
-      localStorage.setItem('rif_user', JSON.stringify(userData));
+  const login = async (email, password) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       return { success: true };
+    } catch (error) {
+      let errorMessage = 'Erreur de connexion';
+      if (error.code === 'auth/invalid-credential' || 
+          error.code === 'auth/wrong-password' ||
+          error.code === 'auth/user-not-found') {
+        errorMessage = 'Email ou mot de passe incorrect';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Format d\'email invalide';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Trop de tentatives. Réessayez plus tard.';
+      }
+      return { success: false, error: errorMessage };
     }
-    return { success: false, error: 'Identifiants incorrects' };
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('rif_user');
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Erreur déconnexion:', error);
+    }
   };
 
   const isAuthenticated = () => !!user;

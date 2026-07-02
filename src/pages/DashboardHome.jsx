@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users, Clock, CheckCircle2, XCircle,
   TrendingUp, FileText, Calendar, Eye,
@@ -6,14 +6,40 @@ import {
 import StatsCard from '../components/dashboard/StatsCard';
 import CandidateTable from '../components/dashboard/CandidateTable';
 import CandidateDetailModal from '../components/dashboard/CandidateDetailModal';
-import { MOCK_CANDIDATES, APPLICATION_STATUS } from '../utils/constants';
+import { APPLICATION_STATUS } from '../utils/constants';
 import { generateCandidatePDF, generateSummaryPDF } from '../services/pdfService';
-import { sendStatusUpdateEmail } from '../services/emailService';
+import { 
+  getAllCandidatures, 
+  updateCandidatureStatus 
+} from '../services/candidatureService';
 
+import { sendStatusUpdateEmail } from '../services/emailService';
+import InterviewModal from '../components/dashboard/InterviewModal';
+import { createInterview } from '../services/interviewService';
+import { createNotification } from '../services/notificationService';
 const DashboardHome = () => {
-  const [candidates, setCandidates] = useState(MOCK_CANDIDATES);
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [interviewModalOpen, setInterviewModalOpen] = useState(false);
+  const [candidateForInterview, setCandidateForInterview] = useState(null);
+  // Charger les candidatures depuis Firestore
+  useEffect(() => {
+    loadCandidatures();
+  }, []);
+
+  const loadCandidatures = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllCandidatures();
+      setCandidates(data);
+    } catch (error) {
+      console.error('Erreur chargement:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stats = {
     total: candidates.length,
@@ -28,19 +54,122 @@ const DashboardHome = () => {
   };
 
   const handleUpdateStatus = async (id, newStatus) => {
+  try {
+    await updateCandidatureStatus(id, newStatus);
+    
+    const candidate = candidates.find((c) => c.id === id);
+    
     setCandidates((prev) =>
       prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
     );
-    const candidate = candidates.find((c) => c.id === id);
-    if (candidate && (newStatus === APPLICATION_STATUS.ACCEPTED || newStatus === APPLICATION_STATUS.REJECTED)) {
-      await sendStatusUpdateEmail(candidate, newStatus);
-    }
+    
     if (selectedCandidate?.id === id) {
       setSelectedCandidate((prev) => ({ ...prev, status: newStatus }));
     }
-  };
+
+    if (candidate) {
+      await createNotification({
+        type: 'status_change',
+        candidateName: `${candidate.firstName} ${candidate.lastName}`,
+        message: `est maintenant : ${newStatus}`,
+        department: candidate.department,
+        candidateId: id,
+      });
+
+      // Si REFUSÉE : envoyer email tout de suite
+      if (newStatus === APPLICATION_STATUS.REJECTED) {
+        await sendStatusUpdateEmail(candidate, newStatus);
+      }
+
+      // Si ACCEPTÉE : ouvrir le modal, l'email suivra
+      if (newStatus === APPLICATION_STATUS.ACCEPTED) {
+        setCandidateForInterview(candidate);
+        setInterviewModalOpen(true);
+      }
+    }
+  } catch (error) {
+    console.error('Erreur:', error);
+    alert('Erreur lors de la mise à jour');
+  }
+};
+
+const handleCreateInterview = async (interviewData) => {
+  try {
+    await createInterview({
+      ...interviewData,
+      candidateId: candidateForInterview.id,
+      candidateName: `${candidateForInterview.firstName} ${candidateForInterview.lastName}`,
+      candidateEmail: candidateForInterview.email,
+      department: candidateForInterview.department,
+      status: 'Confirmé',
+    });
+
+    await createNotification({
+      type: 'interview_reminder',
+      candidateName: `${candidateForInterview.firstName} ${candidateForInterview.lastName}`,
+      message: `Entretien planifié le ${new Date(interviewData.date).toLocaleDateString('fr-FR')} à ${interviewData.time}`,
+      department: candidateForInterview.department,
+      candidateId: candidateForInterview.id,
+    });
+
+    // Envoyer email d'acceptation AVEC les infos d'entretien
+    await sendStatusUpdateEmail(
+      candidateForInterview,
+      APPLICATION_STATUS.ACCEPTED,
+      interviewData
+    );
+
+    console.log('✅ Entretien créé + email envoyé');
+    alert('Entretien planifié ! Le candidat a été notifié par email.');
+  } catch (error) {
+    console.error('❌ Erreur:', error);
+    throw error;
+  }
+};
+
+const handleCloseInterviewModal = async () => {
+  setInterviewModalOpen(false);
+  
+  if (candidateForInterview) {
+    if (window.confirm(
+      'Voulez-vous envoyer l\'email d\'acceptation au candidat sans entretien planifié ?\n\n' +
+      'Cliquez OK pour envoyer, Annuler pour ne pas envoyer.'
+    )) {
+      await sendStatusUpdateEmail(candidateForInterview, APPLICATION_STATUS.ACCEPTED);
+      alert('Email d\'acceptation envoyé sans planning d\'entretien.');
+    }
+    setCandidateForInterview(null);
+  }
+};
 
   const handleGeneratePDF = (candidate) => generateCandidatePDF(candidate);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '400px',
+      }}>
+        <div style={{
+          width: '48px',
+          height: '48px',
+          border: '4px solid #E5E7EB',
+          borderTopColor: '#1E3A5F',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -258,6 +387,12 @@ const DashboardHome = () => {
           }
         }
       `}</style>
+      <InterviewModal
+  isOpen={interviewModalOpen}
+  onClose={handleCloseInterviewModal}
+  onSave={handleCreateInterview}
+  candidate={candidateForInterview}
+/>
     </div>
   );
 };
